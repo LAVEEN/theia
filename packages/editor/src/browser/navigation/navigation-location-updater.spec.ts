@@ -26,52 +26,84 @@ describe('navigation-location-updater', () => {
         expect(actual).to.be.false;
     });
 
-    it('should shift the position to left if deleting before the location - different line', () => {
-        const actual = updater.affects(
-            NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
-            NavigationLocation.create('file:///a', CONTENT_CHANGE, {
-                range: { start: { line: 8, character: 0 }, end: { line: 2, character: 38 } },
-                text: '',
-                rangeLength: -1 // This does not matter for the tests
-            }),
-        );
-        expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 8, character: 16 }));
+    describe('Inserting or deleting text before the position shifts the position accordingly.', () => {
+
+        it('should shift the position to left if deleting text before the location - different line', () => {
+            const actual = updater.affects(
+                NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
+                NavigationLocation.create('file:///a', CONTENT_CHANGE, {
+                    range: { start: { line: 8, character: 0 }, end: { line: 2, character: 38 } },
+                    text: '',
+                    rangeLength: -1 // This does not matter for the tests
+                }),
+            );
+            expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 8, character: 16 }));
+        });
+
+        it('should shift the position to right if inserting text before the location - different line', () => {
+            const actual = updater.affects(
+                NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
+                NavigationLocation.create('file:///a', CONTENT_CHANGE, {
+                    range: { start: { line: 8, character: 0 }, end: { line: 2, character: 38 } },
+                    text: 'Some added content that does not matter for the tests',
+                    rangeLength: -1 // This does not matter for the tests
+                }),
+            );
+            expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 20, character: 16 }));
+        });
+
+        it('should shift the position to left if deleting text before the location - same line', () => {
+            const actual = updater.affects(
+                NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
+                NavigationLocation.create('file:///a', CONTENT_CHANGE, {
+                    range: { start: { line: 14, character: 2 }, end: { line: 14, character: 6 } },
+                    text: '',
+                    rangeLength: -1 // This does not matter for the tests
+                }),
+            );
+            expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 12 }));
+        });
+
+        it('should shift the position to right if inserting text before the location - same line', () => {
+            const actual = updater.affects(
+                NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
+                NavigationLocation.create('file:///a', CONTENT_CHANGE, {
+                    range: { start: { line: 14, character: 2 }, end: { line: 14, character: 6 } },
+                    text: 'Some added content that does not matter for the tests',
+                    rangeLength: -1 // This does not matter for the tests
+                }),
+            );
+            expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 20 }));
+        });
+
     });
 
-    it('should shift the position to right if deleting before the location - different line', () => {
-        const actual = updater.affects(
-            NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
-            NavigationLocation.create('file:///a', CONTENT_CHANGE, {
-                range: { start: { line: 8, character: 0 }, end: { line: 2, character: 38 } },
-                text: 'Some added content that does not matter for the tests',
-                rangeLength: -1 // This does not matter for the tests
-            }),
-        );
-        expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 20, character: 16 }));
-    });
+    describe('Inserting text at the position offset shifts the position accordingly.', () => {
 
-    it('should shift the position to left if deleting before the location - same line', () => {
-        const actual = updater.affects(
-            NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
-            NavigationLocation.create('file:///a', CONTENT_CHANGE, {
-                range: { start: { line: 14, character: 2 }, end: { line: 14, character: 6 } },
-                text: '',
-                rangeLength: -1 // This does not matter for the tests
-            }),
-        );
-        expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 12 }));
-    });
+        it('should shift the position to right if inserting text at the offset of the location - different line', () => {
+            const actual = updater.affects(
+                NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
+                NavigationLocation.create('file:///a', CONTENT_CHANGE, {
+                    range: { start: { line: 2, character: 38 }, end: { line: 14, character: 16 } },
+                    text: 'Some added content that does not matter for the tests',
+                    rangeLength: -1 // This does not matter for the tests
+                }),
+            );
+            expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 26, character: 16 }));
+        });
 
-    it('should shift the position to right if deleting before the location - same line', () => {
-        const actual = updater.affects(
-            NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
-            NavigationLocation.create('file:///a', CONTENT_CHANGE, {
-                range: { start: { line: 14, character: 2 }, end: { line: 14, character: 6 } },
-                text: 'Some added content that does not matter for the tests',
-                rangeLength: -1 // This does not matter for the tests
-            }),
-        );
-        expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 20 }));
+        it('should shift the position to right if inserting text at the offset of the location - same line', () => {
+            const actual = updater.affects(
+                NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 16 }),
+                NavigationLocation.create('file:///a', CONTENT_CHANGE, {
+                    range: { start: { line: 14, character: 5 }, end: { line: 14, character: 16 } },
+                    text: 'Some added content that does not matter for the tests',
+                    rangeLength: -1 // This does not matter for the tests
+                }),
+            );
+            expect(actual).to.be.deep.equal(NavigationLocation.create('file:///a', CURSOR, { line: 14, character: 37 }));
+        });
+
     });
 
 });

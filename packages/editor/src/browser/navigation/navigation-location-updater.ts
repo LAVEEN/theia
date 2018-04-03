@@ -28,46 +28,46 @@ import { NavigationLocation, ContentChangeLocation, CursorLocation, SelectionLoc
 export class NavigationLocationUpdater {
 
     /**
-     * Checks whether `candidate` has to be updated when applying `other`.
-     *  - `false` if the `other` does not affect the `candidate`.
-     *  - A `NavigationLocation` object if the `candidate` has to be replaced with the return value.
+     * Checks whether `candidateLocation` has to be updated when applying `other`.
+     *  - `false` if the `other` does not affect the `candidateLocation`.
+     *  - A `NavigationLocation` object if the `candidateLocation` has to be replaced with the return value.
      *  - `undefined` if the candidate has to be deleted.
      *
-     * If the `other` is not a `ContentChangeLocation` or it does not contain any actual content changes, this method returns with `false`
+     * If the `otherLocation` is not a `ContentChangeLocation` or it does not contain any actual content changes, this method returns with `false`
      */
-    affects(candidate: NavigationLocation, other: NavigationLocation): false | NavigationLocation | undefined {
-        if (!ContentChangeLocation.is(other)) {
+    affects(candidateLocation: NavigationLocation, otherLocation: NavigationLocation): false | NavigationLocation | undefined {
+        if (!ContentChangeLocation.is(otherLocation)) {
             return false;
         }
-        if (candidate.uri.toString() !== other.uri.toString()) {
-            return false;
-        }
-
-        const candidateRange = NavigationLocation.range(candidate);
-        const otherRange = NavigationLocation.range(other);
-        if (candidateRange === undefined || otherRange === undefined) {
+        if (candidateLocation.uri.toString() !== otherLocation.uri.toString()) {
             return false;
         }
 
-        const otherMaxLine = Math.max(otherRange.start.line, otherRange.end.line);
-        const candidateMinLine = Math.min(candidateRange.start.line, candidateRange.end.line);
-        const otherMaxCharacter = Math.max(otherRange.start.character, otherRange.end.character);
-        const candidateMinCharacter = Math.min(candidateRange.start.character, candidateRange.end.character);
-        // Inserting or deleting text before the position shifts the position accordingly.
-        // Different line. Just shift the line.
-        if (otherMaxLine < candidateMinLine) {
-            const { uri, type } = candidate;
-            const context = this.handleBefore(candidate, other.context, true, false);
-            return {
-                uri,
-                type,
-                context
-            };
+        const candidate = NavigationLocation.range(candidateLocation);
+        const other = NavigationLocation.range(otherLocation);
+        if (candidate === undefined || other === undefined) {
+            return false;
         }
-        // Shift the line and the character too.
-        if (otherMaxLine === candidateMinLine && otherMaxCharacter < candidateMinCharacter) {
-            const { uri, type } = candidate;
-            const context = this.handleBefore(candidate, other.context, true, true);
+
+        const otherMaxLine = Math.max(other.start.line, other.end.line);
+        const candidateMinLine = Math.min(candidate.start.line, candidate.end.line);
+        const candidateMinCharacter = Math.min(candidate.start.character, candidate.end.character);
+        const lineDiff = Math.abs(other.start.line - other.end.line);
+        // If the max line of the modification is less than the candidate min line, no need to shift the characters.
+        // If the max line of the modification equals with the min line of candidate, we need to consider the characters.
+        // Otherwise, the modification is after the candidate, and we can ignore those cases.
+
+        let characterDiff = NaN;
+        if (otherMaxLine === candidateMinLine || otherMaxLine < candidateMinLine) {
+            if (otherMaxLine === candidateMinLine) {
+                if (other.start.line === otherMaxLine && other.start.character <= candidateMinCharacter) {
+                    characterDiff = candidateMinCharacter - other.start.character;
+                } else if (other.end.character <= candidateMinCharacter) {
+                    characterDiff = candidateMinCharacter - other.end.character;
+                }
+            }
+            const { uri, type } = candidateLocation;
+            const context = this.handleBefore(candidateLocation, other, lineDiff, characterDiff, otherLocation.context.text === '');
             return {
                 uri,
                 type,
@@ -80,29 +80,21 @@ export class NavigationLocationUpdater {
 
     protected handleBefore(
         candidate: NavigationLocation,
-        delta: TextDocumentContentChangeDelta,
-        shiftLine: boolean,
-        shiftCharacter: boolean): Position | Range | TextDocumentContentChangeDelta {
+        modification: Range,
+        lineDiff: number,
+        characterDiff: number,
+        deletion: boolean): Position | Range | TextDocumentContentChangeDelta {
 
-        const deletion = delta.text.length === 0;
-        const lineDiff = Math.abs(delta.range.start.line - delta.range.end.line) * (deletion ? -1 : 1);
-        const characterDiff = Math.abs(delta.range.start.character - delta.range.end.character) * (deletion ? -1 : 1);
         let range = NavigationLocation.range(candidate);
-        if (shiftLine) {
-            range = this.shiftLine(range, lineDiff);
-        }
-        if (shiftCharacter) {
-            range = this.shiftCharacter(range, characterDiff);
-        }
+        range = this.shiftLine(range, deletion ? lineDiff * -1 : lineDiff);
+        range = this.shiftCharacter(range, deletion ? characterDiff * -1 : characterDiff);
 
         if (CursorLocation.is(candidate)) {
             return range.start;
         }
-
         if (SelectionLocation.is(candidate)) {
             return range;
         }
-
         if (ContentChangeLocation.is(candidate)) {
             const { rangeLength, text } = candidate.context;
             return {
@@ -114,37 +106,43 @@ export class NavigationLocationUpdater {
         throw new Error(`Unexpected navigation location: ${candidate}.`);
     }
 
-    protected shiftLine(position: Position, lineDiff: number): Position;
-    protected shiftLine(range: Range, lineDiff: number): Range;
-    protected shiftLine(input: Position | Range, lineDiff: number): Position | Range {
+    protected shiftLine(position: Position, diff: number): Position;
+    protected shiftLine(range: Range, diff: number): Range;
+    protected shiftLine(input: Position | Range, diff: number): Position | Range {
+        if (Number.isNaN(diff)) {
+            return input;
+        }
         if (Position.is(input)) {
             const { line, character } = input;
             return {
-                line: line + lineDiff,
+                line: line + diff,
                 character
             };
         }
         const { start, end } = input;
         return {
-            start: this.shiftLine(start, lineDiff),
-            end: this.shiftLine(end, lineDiff)
+            start: this.shiftLine(start, diff),
+            end: this.shiftLine(end, diff)
         };
     }
 
-    protected shiftCharacter(position: Position, characterDiff: number): Position;
-    protected shiftCharacter(range: Range, characterDiff: number): Range;
-    protected shiftCharacter(input: Position | Range, characterDiff: number): Position | Range {
+    protected shiftCharacter(position: Position, diff: number): Position;
+    protected shiftCharacter(range: Range, diff: number): Range;
+    protected shiftCharacter(input: Position | Range, diff: number): Position | Range {
+        if (Number.isNaN(diff)) {
+            return input;
+        }
         if (Position.is(input)) {
             const { line, character } = input;
             return {
                 line,
-                character: character + characterDiff
+                character: character + diff
             };
         }
         const { start, end } = input;
         return {
-            start: this.shiftCharacter(start, characterDiff),
-            end: this.shiftCharacter(end, characterDiff)
+            start: this.shiftCharacter(start, diff),
+            end: this.shiftCharacter(end, diff)
         };
     }
 
