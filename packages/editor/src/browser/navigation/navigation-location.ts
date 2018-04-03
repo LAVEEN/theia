@@ -53,7 +53,7 @@ export interface NavigationLocation {
     /**
      * Context of the navigation location.
      */
-    readonly context: Position | Range | TextDocumentContentChangeDelta[];
+    readonly context: Position | Range | TextDocumentContentChangeDelta;
 
 }
 
@@ -92,7 +92,7 @@ export namespace NavigationLocation {
                 switch (type) {
                     case NavigationLocation.Type.CURSOR: return CursorLocation.fromObject(object.context as Position);
                     case NavigationLocation.Type.SELECTION: return SelectionLocation.fromObject(object.context as Range);
-                    case NavigationLocation.Type.CONTENT_CHANGE: return ContentChangeLocation.fromObject(object.context as TextDocumentContentChangeDelta[]);
+                    case NavigationLocation.Type.CONTENT_CHANGE: return ContentChangeLocation.fromObject(object.context as TextDocumentContentChangeDelta);
                 }
             })();
             if (context) {
@@ -104,6 +104,22 @@ export namespace NavigationLocation {
             }
         }
         return undefined;
+    }
+
+    /**
+     * Returns with the context of the location as a `Range`.
+     */
+    export function range(location: NavigationLocation): Range {
+        if (CursorLocation.is(location)) {
+            return Range.create(location.context, location.context);
+        }
+        if (SelectionLocation.is(location)) {
+            return location.context;
+        }
+        if (ContentChangeLocation.is(location)) {
+            return location.context.range;
+        }
+        throw new Error(`Unexpected navigation location: ${location}.`);
     }
 
     /**
@@ -119,12 +135,12 @@ export namespace NavigationLocation {
     /**
      * Creates a new text content change location type.
      */
-    export function create(uri: URI | { uri: URI } | string, type: NavigationLocation.Type.CONTENT_CHANGE, context: TextDocumentContentChangeDelta[]): ContentChangeLocation;
+    export function create(uri: URI | { uri: URI } | string, type: NavigationLocation.Type.CONTENT_CHANGE, context: TextDocumentContentChangeDelta): ContentChangeLocation;
 
     /**
      * Creates a new navigation location object.
      */
-    export function create(uri: URI | { uri: URI } | string, type: NavigationLocation.Type, context: Position | Range | TextDocumentContentChangeDelta[]): NavigationLocation {
+    export function create(uri: URI | { uri: URI } | string, type: NavigationLocation.Type, context: Position | Range | TextDocumentContentChangeDelta): NavigationLocation {
         return {
             uri: toUri(uri),
             type,
@@ -195,20 +211,6 @@ export namespace CursorLocation {
         return undefined;
     }
 
-    /**
-     * Converts the position argument into an empty range, where the `start` and the `end` range are the same.
-     * If the argument was a range, returns with a reference to the argument.
-     */
-    export function toRange(position: Position | Range): Range {
-        if (Range.is(position)) {
-            return position;
-        }
-        return {
-            start: position,
-            end: position
-        };
-    }
-
 }
 
 /**
@@ -277,9 +279,9 @@ export interface ContentChangeLocation extends NavigationLocation {
     readonly type: NavigationLocation.Type.CONTENT_CHANGE;
 
     /**
-     * An array of text document content change deltas as the context.
+     * A text document content change deltas as the context.
      */
-    readonly context: TextDocumentContentChangeDelta[];
+    readonly context: TextDocumentContentChangeDelta;
 
 }
 
@@ -295,36 +297,32 @@ export namespace ContentChangeLocation {
     /**
      * Returns with a serializable object representing the arguments.
      */
-    export function toObject(context: TextDocumentContentChangeDelta[]): object {
-        return context.map(delta => ({
-            range: SelectionLocation.toObject(delta.range),
-            rangeLength: delta.rangeLength,
-            text: delta.text
-        }));
+    export function toObject(context: TextDocumentContentChangeDelta): object {
+        return {
+            range: SelectionLocation.toObject(context.range),
+            rangeLength: context.rangeLength,
+            text: context.text
+        };
     }
 
     /**
-     * Returns with an array of text document change deltas for the argument. `undefined` if the argument cannot be mapped to an array of content change deltas.
+     * Returns with a text document change delta for the argument. `undefined` if the argument cannot be mapped to a content change delta.
      */
-    export function fromObject(object: ArrayLike<Partial<TextDocumentContentChangeDelta>>): TextDocumentContentChangeDelta[] | undefined {
-        const result: TextDocumentContentChangeDelta[] = [];
-        for (let i = 0; i < object.length; i++) {
-            if (!!object[i].range && object[i].rangeLength !== undefined && object[i].text !== undefined) {
-                const range = SelectionLocation.fromObject(object[i].range!);
-                const rangeLength = object[i].rangeLength;
-                const text = object[i].text;
-                if (!!range) {
-                    result.push({
-                        range,
-                        rangeLength: rangeLength!,
-                        text: text!
-                    });
-                }
-            } else {
-                return undefined;
+    export function fromObject(object: Partial<TextDocumentContentChangeDelta>): TextDocumentContentChangeDelta | undefined {
+        if (!!object.range && object.rangeLength !== undefined && object.text !== undefined) {
+            const range = SelectionLocation.fromObject(object.range!);
+            const rangeLength = object.rangeLength;
+            const text = object.text;
+            if (!!range) {
+                return {
+                    range,
+                    rangeLength: rangeLength!,
+                    text: text!
+                };
             }
+        } else {
+            return undefined;
         }
-        return result;
     }
 
 }

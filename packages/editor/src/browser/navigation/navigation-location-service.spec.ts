@@ -14,9 +14,9 @@ import { ILogger } from '@theia/core/lib/common/logger';
 import { MockLogger } from '@theia/core/lib/common/test/mock-logger';
 import { OpenerService } from '@theia/core/lib/browser/opener-service';
 import { MockOpenerService } from '@theia/core/lib/browser/test/mock-opener-service';
+import { NavigationLocationUpdater } from './navigation-location-updater';
 import { NavigationLocationSimilarity } from './navigation-location-similarity';
 import { CursorLocation, Position, NavigationLocation } from './navigation-location';
-import { MockNavigationLocationServiceConfiguration } from './test/mock-navigation-location-service';
 import { NavigationLocationService, NavigationLocationServiceConfiguration } from './navigation-location-service';
 
 disableJSDOM();
@@ -82,12 +82,12 @@ describe('navigation-location-service', () => {
     function init(): [NavigationLocationService, NavigationLocationServiceConfiguration] {
         const container = new Container({ defaultScope: 'Singleton' });
         container.bind(NavigationLocationService).toSelf();
-        container.bind(MockNavigationLocationServiceConfiguration).toSelf();
-        container.bind(NavigationLocationServiceConfiguration).toService(MockNavigationLocationServiceConfiguration);
+        container.bind(NavigationLocationServiceConfiguration).toSelf();
         container.bind(NavigationLocationSimilarity).toSelf();
         container.bind(MockOpenerService).toSelf();
         container.bind(MockLogger).toSelf();
         container.bind(ILogger).toService(MockLogger);
+        container.bind(NavigationLocationUpdater).toSelf();
         container.bind(OpenerService).toService(MockOpenerService);
         return [
             container.get(NavigationLocationService),

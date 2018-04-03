@@ -6,7 +6,7 @@
  */
 
 import { injectable } from 'inversify';
-import { NavigationLocation, ContentChangeLocation, CursorLocation, SelectionLocation, Range } from './navigation-location';
+import { NavigationLocation } from './navigation-location';
 
 /**
  * Service for checking whether two navigation locations are similar or not.
@@ -31,24 +31,8 @@ export class NavigationLocationSimilarity {
             return false;
         }
 
-        const asRange = (location: NavigationLocation): Range | undefined => {
-            if (CursorLocation.is(location)) {
-                return CursorLocation.toRange(location.context);
-            }
-            if (SelectionLocation.is(location)) {
-                return location.context;
-            }
-            if (ContentChangeLocation.is(location)) {
-                const deltas = location.context;
-                if (deltas.length === 0) {
-                    return undefined;
-                }
-                return deltas[0].range;
-            }
-        };
-
-        const leftRange = asRange(left);
-        const rightRange = asRange(right);
+        const leftRange = NavigationLocation.range(left);
+        const rightRange = NavigationLocation.range(right);
         if (leftRange === undefined || rightRange === undefined) {
             return leftRange === rightRange;
         }

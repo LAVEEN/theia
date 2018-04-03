@@ -6,7 +6,8 @@
  */
 
 import { injectable } from 'inversify';
-import { NavigationLocation } from './navigation-location';
+import { Position, Range, TextDocumentContentChangeDelta } from '../editor';
+import { NavigationLocation, ContentChangeLocation, CursorLocation, SelectionLocation } from './navigation-location';
 
 /**
  * A navigation location updater that is responsible for adapting editor navigation locations.
@@ -31,12 +32,81 @@ export class NavigationLocationUpdater {
      *  - `false` if the `other` does not affect the `candidate`.
      *  - A `NavigationLocation` object if the `candidate` has to be replaced with the return value.
      *  - `undefined` if the candidate has to be deleted.
+     *
+     * If the `other` is not a `ContentChangeLocation` or it does not contain any actual content changes, this method returns with `false`
      */
     affects(candidate: NavigationLocation, other: NavigationLocation): false | NavigationLocation | undefined {
+        if (!ContentChangeLocation.is(other)) {
+            return false;
+        }
         if (candidate.uri.toString() !== other.uri.toString()) {
             return false;
         }
+
+        const candidateRange = NavigationLocation.range(candidate);
+        const otherRange = NavigationLocation.range(other);
+        if (candidateRange === undefined || otherRange === undefined) {
+            return false;
+        }
+
+        const otherMaxLine = Math.max(otherRange.start.line, otherRange.end.line);
+        const candidateMinLine = Math.min(candidateRange.start.line, candidateRange.end.line);
+        // Inserting or deleting text before the position shifts the position accordingly.
+        if (otherMaxLine < candidateMinLine) {
+            const { uri, type } = candidate;
+            const context = this.handleBefore(candidate, other.context);
+            return {
+                uri,
+                type,
+                context
+            };
+        }
+
         return false;
+    }
+
+    protected handleBefore(candidate: NavigationLocation, delta: TextDocumentContentChangeDelta): Position | Range | TextDocumentContentChangeDelta {
+        const deletion = delta.text.length === 0;
+        const lineDiff = Math.abs(delta.range.start.line - delta.range.end.line) * (deletion ? -1 : 1);
+        if (CursorLocation.is(candidate)) {
+            const { line, character } = candidate.context;
+            return {
+                line: line + lineDiff,
+                character
+            } as Position;
+        }
+        if (SelectionLocation.is(candidate)) {
+            const { start, end } = candidate.context;
+            return {
+                start: {
+                    line: start.line + lineDiff,
+                    character: start.character
+                },
+                end: {
+                    line: end.line + lineDiff,
+                    character: end.character
+                }
+            };
+        }
+        if (ContentChangeLocation.is(candidate)) {
+            const { range, rangeLength, text } = candidate.context;
+            const { start, end } = range;
+            return {
+                range: {
+                    start: {
+                        line: start.line + lineDiff,
+                        character: start.character
+                    },
+                    end: {
+                        line: end.line + lineDiff,
+                        character: end.character
+                    }
+                },
+                rangeLength,
+                text
+            };
+        }
+        throw new Error(`Unexpected navigation location: ${candidate}.`);
     }
 
 }

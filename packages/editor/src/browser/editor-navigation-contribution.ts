@@ -106,6 +106,7 @@ export class EditorNavigationContribution implements Disposable, MenuContributio
     }
 
     protected onCursorPositionChanged(editor: TextEditor, position: Position): void {
+        console.log('cursor position changed', editor.uri.toString(), 'position', position);
         this.locationStack.register(NavigationLocation.create(editor, NavigationLocation.Type.CURSOR, position));
         this.storeState();
     }
@@ -114,14 +115,18 @@ export class EditorNavigationContribution implements Disposable, MenuContributio
         if (this.isZeroLengthRange(selection)) {
             this.onCursorPositionChanged(editor, selection.start);
         } else {
+            console.log('selection changed', editor.uri.toString(), 'selection', selection);
             this.locationStack.register(NavigationLocation.create(editor, NavigationLocation.Type.SELECTION, selection));
             this.storeState();
         }
     }
 
     protected onDocumentContentChanged(editor: TextEditor, event: TextDocumentChangeEvent): void {
-        this.locationStack.register(NavigationLocation.create(editor, NavigationLocation.Type.CONTENT_CHANGE, event.contentChanges));
-        this.storeState();
+        if (event.contentChanges.length > 0) {
+            console.log('document content changed', editor.uri.toString(), 'content changes', event.contentChanges);
+            this.locationStack.register(NavigationLocation.create(editor, NavigationLocation.Type.CONTENT_CHANGE, event.contentChanges[0]));
+            this.storeState();
+        }
     }
 
     /**

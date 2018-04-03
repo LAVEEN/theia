@@ -11,7 +11,7 @@ import { OpenerService, OpenerOptions, open } from '@theia/core/lib/browser/open
 import { EditorOpenerOptions } from '../editor-manager';
 import { NavigationLocationUpdater } from './navigation-location-updater';
 import { NavigationLocationSimilarity } from './navigation-location-similarity';
-import { ContentChangeLocation, CursorLocation, NavigationLocation, SelectionLocation, Position } from './navigation-location';
+import { NavigationLocation } from './navigation-location';
 
 /**
  * Configuration object for the navigation location service.
@@ -162,29 +162,9 @@ export class NavigationLocationService {
      * Returns with the opener option for the location argument.
      */
     protected toOpenerOptions(location: NavigationLocation): OpenerOptions {
-        const position = ((): Position | undefined => {
-            if (location === undefined) {
-                return undefined;
-            }
-            if (CursorLocation.is(location)) {
-                return location.context;
-            }
-            if (SelectionLocation.is(location)) {
-                return location.context.start;
-            }
-            if (ContentChangeLocation.is(location)) {
-                if (location.context.length === 0) {
-                    return undefined;
-                }
-                return location.context[0].range.start;
-            }
-            throw new Error(`Unexpected navigation location: ${location}.`);
-        })();
-        if (position === undefined) {
-            return {};
-        }
+        const range = NavigationLocation.range(location);
         return {
-            selection: CursorLocation.toRange(position)
+            selection: range.start
         } as EditorOpenerOptions;
     }
 
