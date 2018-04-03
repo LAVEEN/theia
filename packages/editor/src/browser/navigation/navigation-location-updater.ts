@@ -51,10 +51,23 @@ export class NavigationLocationUpdater {
 
         const otherMaxLine = Math.max(otherRange.start.line, otherRange.end.line);
         const candidateMinLine = Math.min(candidateRange.start.line, candidateRange.end.line);
+        const otherMaxCharacter = Math.max(otherRange.start.character, otherRange.end.character);
+        const candidateMinCharacter = Math.min(candidateRange.start.character, candidateRange.end.character);
         // Inserting or deleting text before the position shifts the position accordingly.
+        // Different line. Just shift the line.
         if (otherMaxLine < candidateMinLine) {
             const { uri, type } = candidate;
-            const context = this.handleBefore(candidate, other.context);
+            const context = this.handleBefore(candidate, other.context, true, false);
+            return {
+                uri,
+                type,
+                context
+            };
+        }
+        // Shift the line and the character too.
+        if (otherMaxLine === candidateMinLine && otherMaxCharacter < candidateMinCharacter) {
+            const { uri, type } = candidate;
+            const context = this.handleBefore(candidate, other.context, true, true);
             return {
                 uri,
                 type,
@@ -65,48 +78,74 @@ export class NavigationLocationUpdater {
         return false;
     }
 
-    protected handleBefore(candidate: NavigationLocation, delta: TextDocumentContentChangeDelta): Position | Range | TextDocumentContentChangeDelta {
+    protected handleBefore(
+        candidate: NavigationLocation,
+        delta: TextDocumentContentChangeDelta,
+        shiftLine: boolean,
+        shiftCharacter: boolean): Position | Range | TextDocumentContentChangeDelta {
+
         const deletion = delta.text.length === 0;
         const lineDiff = Math.abs(delta.range.start.line - delta.range.end.line) * (deletion ? -1 : 1);
+        const characterDiff = Math.abs(delta.range.start.character - delta.range.end.character) * (deletion ? -1 : 1);
+        let range = NavigationLocation.range(candidate);
+        if (shiftLine) {
+            range = this.shiftLine(range, lineDiff);
+        }
+        if (shiftCharacter) {
+            range = this.shiftCharacter(range, characterDiff);
+        }
+
         if (CursorLocation.is(candidate)) {
-            const { line, character } = candidate.context;
-            return {
-                line: line + lineDiff,
-                character
-            } as Position;
+            return range.start;
         }
+
         if (SelectionLocation.is(candidate)) {
-            const { start, end } = candidate.context;
-            return {
-                start: {
-                    line: start.line + lineDiff,
-                    character: start.character
-                },
-                end: {
-                    line: end.line + lineDiff,
-                    character: end.character
-                }
-            };
+            return range;
         }
+
         if (ContentChangeLocation.is(candidate)) {
-            const { range, rangeLength, text } = candidate.context;
-            const { start, end } = range;
+            const { rangeLength, text } = candidate.context;
             return {
-                range: {
-                    start: {
-                        line: start.line + lineDiff,
-                        character: start.character
-                    },
-                    end: {
-                        line: end.line + lineDiff,
-                        character: end.character
-                    }
-                },
+                range,
                 rangeLength,
                 text
             };
         }
         throw new Error(`Unexpected navigation location: ${candidate}.`);
+    }
+
+    protected shiftLine(position: Position, lineDiff: number): Position;
+    protected shiftLine(range: Range, lineDiff: number): Range;
+    protected shiftLine(input: Position | Range, lineDiff: number): Position | Range {
+        if (Position.is(input)) {
+            const { line, character } = input;
+            return {
+                line: line + lineDiff,
+                character
+            };
+        }
+        const { start, end } = input;
+        return {
+            start: this.shiftLine(start, lineDiff),
+            end: this.shiftLine(end, lineDiff)
+        };
+    }
+
+    protected shiftCharacter(position: Position, characterDiff: number): Position;
+    protected shiftCharacter(range: Range, characterDiff: number): Range;
+    protected shiftCharacter(input: Position | Range, characterDiff: number): Position | Range {
+        if (Position.is(input)) {
+            const { line, character } = input;
+            return {
+                line,
+                character: character + characterDiff
+            };
+        }
+        const { start, end } = input;
+        return {
+            start: this.shiftCharacter(start, characterDiff),
+            end: this.shiftCharacter(end, characterDiff)
+        };
     }
 
 }
